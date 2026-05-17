@@ -9,11 +9,7 @@ app = FastAPI(title="SkillSwap API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://v4frontend-production.up.railway.app",
-        "http://localhost:5500",  # for local testing
-        "http://127.0.0.1:5500",
-    ],
+    allow_origins=["*"],  # Allow all for testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
