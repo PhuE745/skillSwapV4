@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from app.routers import auth, users, skills, matches, exchanges, admin, messages, posts, reviews
+import threading
+import time
+from app.scheduler_worker import process_scheduled_messages
 
 load_dotenv()
 
@@ -14,9 +17,9 @@ app.add_middleware(
         "https://skillswapph-production.up.railway.app",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
-        "http://127.0.0.1:5500",     # ← ADD THIS (Live Server)
-        "http://localhost:5500",      # ← ADD THIS (Live Server)
-        "http://127.0.0.1:5501",     # optional if you use different port
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "http://127.0.0.1:5501",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -40,5 +43,18 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+# Start background scheduler for scheduled messages
+def start_scheduler():
+    print("🕐 Scheduler thread started")
+    while True:
+        time.sleep(60)
+        try:
+            process_scheduled_messages()
+        except Exception as e:
+            print(f"Scheduler error: {e}")
+
+scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
+scheduler_thread.start()
 
 # For Vercel serverless

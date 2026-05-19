@@ -94,3 +94,30 @@ def get_messages(other_user_id: str, current_user = Depends(get_current_user)):
         })
     
     return {"other_user_name": other_name, "messages": result}
+
+class ScheduleMessageRequest(BaseModel):
+    receiver_id: str
+    message: str
+    scheduled_for: str
+
+@router.post("/schedule")
+def schedule_message(request: ScheduleMessageRequest, current_user = Depends(get_current_user)):
+    sender_id = current_user["id"]
+    
+    # Check if receiver exists
+    receiver = supabase.table("profiles").select("id").eq("id", request.receiver_id).execute()
+    if not receiver.data:
+        raise HTTPException(status_code=404, detail="Receiver not found")
+    
+    # Insert scheduled message
+    scheduled_message = {
+        "sender_id": sender_id,
+        "receiver_id": request.receiver_id,
+        "message": request.message,
+        "scheduled_for": request.scheduled_for,
+        "status": "pending"
+    }
+    
+    result = supabase.table("scheduled_messages").insert(scheduled_message).execute()
+    
+    return {"message": "Message scheduled successfully", "data": result.data[0]}
