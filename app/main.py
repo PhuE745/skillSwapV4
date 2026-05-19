@@ -12,7 +12,10 @@ app.add_middleware(
     allow_origins=[
         "https://v4frontend-production.up.railway.app",
         "http://localhost:8000",
-        "http://127.0.0.1:8000"
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:5500",     # ← ADD THIS (Live Server)
+        "http://localhost:5500",      # ← ADD THIS (Live Server)
+        "http://127.0.0.1:5501",     # optional if you use different port
     ],
     allow_credentials=True,
     allow_methods=["*"],
