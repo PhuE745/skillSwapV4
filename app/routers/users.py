@@ -23,6 +23,16 @@ class AddInterestRequest(BaseModel):
 def get_me(current_user = Depends(get_current_user)):
     return current_user
 
+@router.get("/{user_id}")
+def get_user_by_id(user_id: str, current_user = Depends(get_current_user)):
+    # Fetch user profile by ID
+    response = supabase.table("profiles").select("*").eq("id", user_id).execute()
+    
+    if not response.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return response.data[0]
+
 @router.put("/me")
 def update_me(update: ProfileUpdate, current_user = Depends(get_current_user)):
     update_data = {k: v for k, v in update.dict().items() if v is not None}
