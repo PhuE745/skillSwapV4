@@ -10,6 +10,10 @@ router = APIRouter(prefix="/api/v1/posts", tags=["posts"])
 class CreatePostRequest(BaseModel):
     content: str
     skill_tag: Optional[str] = None
+    attachment_url: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_type: Optional[str] = None
+    attachment_size: Optional[int] = None
 
 class UpdatePostRequest(BaseModel):
     content: Optional[str] = None
@@ -27,6 +31,10 @@ def create_post(request: CreatePostRequest, current_user = Depends(get_current_u
             "user_id": user_id,
             "content": request.content,
             "skill_tag": request.skill_tag,
+            "attachment_url": request.attachment_url,
+            "attachment_name": request.attachment_name,
+            "attachment_type": request.attachment_type,
+            "attachment_size": request.attachment_size,
             "likes_count": 0,
             "comment_count": 0,
             "created_at": datetime.utcnow().isoformat()
@@ -110,6 +118,10 @@ def get_posts(
                 "user_avatar": username[:2].upper() if username else "U",
                 "content": post["content"],
                 "skill_tag": post.get("skill_tag"),
+                "attachment_url": post.get("attachment_url"),
+                "attachment_name": post.get("attachment_name"),
+                "attachment_type": post.get("attachment_type"),
+                "attachment_size": post.get("attachment_size"),
                 "likes_count": post.get("likes_count", 0),
                 "comment_count": post.get("comment_count", 0),
                 "user_liked": len(user_liked.data) > 0,
@@ -125,6 +137,45 @@ def get_posts(
     
     except Exception as e:
         print(f"Get posts error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# NEW ENDPOINT - Get posts by a specific user ID
+@router.get("/user/{user_id}")
+def get_user_posts(user_id: str, current_user = Depends(get_current_user)):
+    try:
+        # Get posts for a specific user
+        posts = supabase.table("posts").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        
+        # Get user info for each post
+        result = []
+        for post in posts.data:
+            author = supabase.table("profiles").select("username").eq("id", post["user_id"]).execute()
+            username = author.data[0]["username"] if author.data else "Unknown"
+            
+            # Check if current user liked this post
+            user_liked = supabase.table("post_likes").select("id").eq("post_id", post["id"]).eq("user_id", current_user["id"]).execute()
+            
+            result.append({
+                "id": post["id"],
+                "user_id": post["user_id"],
+                "username": username,
+                "user_avatar": username[:2].upper() if username else "U",
+                "content": post["content"],
+                "skill_tag": post.get("skill_tag"),
+                "attachment_url": post.get("attachment_url"),
+                "attachment_name": post.get("attachment_name"),
+                "attachment_type": post.get("attachment_type"),
+                "attachment_size": post.get("attachment_size"),
+                "likes_count": post.get("likes_count", 0),
+                "comment_count": post.get("comment_count", 0),
+                "user_liked": len(user_liked.data) > 0,
+                "created_at": post["created_at"]
+            })
+        
+        return result
+    
+    except Exception as e:
+        print(f"Get user posts error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{post_id}")

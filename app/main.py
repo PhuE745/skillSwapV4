@@ -5,8 +5,10 @@ from app.routers import auth, users, skills, matches, exchanges, admin, messages
 import threading
 import time
 from app.scheduler_worker import process_scheduled_messages
+from app.routers import sessions
+from app.routers import upload
+from app.routers import fcm
 
-load_dotenv()
 
 app = FastAPI(title="SkillSwap API", version="1.0.0")
 
@@ -35,6 +37,10 @@ app.include_router(admin.router)
 app.include_router(messages.router)
 app.include_router(posts.router)
 app.include_router(reviews.router)
+app.include_router(sessions.router)
+app.include_router(upload.router)
+app.include_router(fcm.router)
+
 
 @app.get("/")
 def root():
