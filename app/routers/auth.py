@@ -20,7 +20,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
-    pin: str  # ← ADDED PIN FIELD
+    pin: str
 
 class VerifyPinRequest(BaseModel):
     email: str
@@ -34,9 +34,6 @@ class ResetPasswordRequest(BaseModel):
 @router.post("/register")
 def register(user: RegisterRequest):
     try:
-        print(f"🔵 REGISTRATION STARTED for: {user.email}")
-        print(f"📝 Username received from form: '{user.username}'")  # ← ADDED DEBUG LINE
-        
         # Validate PIN
         if not user.pin or not user.pin.isdigit() or len(user.pin) != 4:
             raise HTTPException(status_code=400, detail="PIN must be 4 digits")
@@ -58,22 +55,12 @@ def register(user: RegisterRequest):
         if not auth_response.user:
             raise HTTPException(status_code=400, detail="Registration failed")
         
-        print(f"✅ Auth user created: {auth_response.user.id}")
-        
         # Hash the password and PIN
         hashed_password = hash_password(user.password)
         hashed_pin = pwd_context.hash(user.pin)
         
-        # DEBUG: Print hash lengths
-        print(f"📝 Password hash length: {len(hashed_password)}")
-        print(f"📝 PIN hash length: {len(hashed_pin)}")
-        print(f"📝 Password hash preview: {hashed_password[:20]}...")
-        print(f"📝 PIN hash preview: {hashed_pin[:20]}...")
-        
-        print(f"📝 Updating profile for: {user.email}")
-        
         # UPDATE existing profile (created by Supabase Auth trigger) instead of INSERT
-        result = supabase.table("profiles").update({
+        supabase.table("profiles").update({
             "password_hash": hashed_password,
             "pin_hash": hashed_pin,
             "pin_attempts": 0,
@@ -83,25 +70,17 @@ def register(user: RegisterRequest):
             "skills_wanted": []
         }).eq("id", auth_response.user.id).execute()
         
-        print(f"✅ Profile updated for: {user.email}")
-        
         # FORCE update username to override any trigger
         supabase.table("profiles").update({
             "username": user.username
         }).eq("id", auth_response.user.id).execute()
-        print(f"✅ Username forced to: '{user.username}'")
         
         # Create token
         token = create_access_token({"sub": auth_response.user.id})
         
-        print(f"🎉 REGISTRATION COMPLETE for: {user.email}")
-        
         return {"access_token": token, "token_type": "bearer", "user": {"id": auth_response.user.id, "email": user.email, "username": user.username}}
     
     except Exception as e:
-        print(f"❌ REGISTER ERROR: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/login")
@@ -110,8 +89,6 @@ def login(request: LoginRequest):
     Authenticate a user with email, password, and PIN.
     """
     try:
-        print(f"🔵 LOGIN ATTEMPT for: {request.email}")
-        
         # First, get user profile from database
         profile = supabase.table("profiles").select("*").eq("email", request.email).execute()
         
@@ -165,8 +142,6 @@ def login(request: LoginRequest):
         # Create JWT token
         token = create_access_token({"sub": auth_response.user.id})
         
-        print(f"🎉 LOGIN COMPLETE for: {request.email}")
-        
         return {
             "access_token": token, 
             "token_type": "bearer", 
@@ -176,9 +151,6 @@ def login(request: LoginRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ LOGIN ERROR: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/verify-pin")
@@ -238,7 +210,6 @@ def verify_pin(request: VerifyPinRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"VERIFY PIN ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reset-password")
@@ -283,17 +254,13 @@ def reset_password(request: ResetPasswordRequest):
                     user["id"],
                     {"password": request.new_password}
                 )
-                print(f"✅ Supabase Auth password updated for: {request.email}")
-            else:
-                print(f"⚠️ SUPABASE_SERVICE_ROLE_KEY not set. Auth password not updated.")
-        except Exception as auth_error:
-            print(f"⚠️ Could not update Supabase Auth password: {auth_error}")
+        except Exception:
             # Don't fail the request - profile password is updated
+            pass
         
         return {"success": True, "message": "Password reset successfully"}
     
     except HTTPException:
         raise
     except Exception as e:
-        print(f"RESET PASSWORD ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
