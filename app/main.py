@@ -4,11 +4,12 @@ from dotenv import load_dotenv
 from app.routers import auth, users, skills, matches, exchanges, admin, messages, posts, reviews
 import threading
 import time
-from app.scheduler_worker import process_scheduled_messages
 from app.routers import sessions
 from app.routers import upload
 from app.routers import fcm
+from app.routers import badges
 
+load_dotenv()
 
 app = FastAPI(title="SkillSwap API", version="1.0.0")
 
@@ -21,6 +22,8 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "http://127.0.0.1:5500",
         "http://localhost:5500",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
         "http://127.0.0.1:5501",
     ],
     allow_credentials=True,
@@ -40,7 +43,7 @@ app.include_router(reviews.router)
 app.include_router(sessions.router)
 app.include_router(upload.router)
 app.include_router(fcm.router)
-
+app.include_router(badges.router)
 
 @app.get("/")
 def root():
@@ -49,18 +52,3 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
-
-# Start background scheduler for scheduled messages
-def start_scheduler():
-    print("🕐 Scheduler thread started")
-    while True:
-        time.sleep(60)
-        try:
-            process_scheduled_messages()
-        except Exception as e:
-            print(f"Scheduler error: {e}")
-
-scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
-scheduler_thread.start()
-
-# For Vercel serverless

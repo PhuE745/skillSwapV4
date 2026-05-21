@@ -150,3 +150,9 @@ def update_review(review_id: int, request: UpdateReviewRequest, current_user = D
     except Exception as e:
         print(f"Update review error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/my")
+def get_my_reviews(current_user = Depends(get_current_user)):
+    """Get all reviews by the current user"""
+    reviews = supabase.table("reviews").select("*").eq("reviewer_id", current_user["id"]).execute()
+    return reviews.data

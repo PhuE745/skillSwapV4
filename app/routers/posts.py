@@ -139,7 +139,6 @@ def get_posts(
         print(f"Get posts error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# NEW ENDPOINT - Get posts by a specific user ID
 @router.get("/user/{user_id}")
 def get_user_posts(user_id: str, current_user = Depends(get_current_user)):
     try:
@@ -155,6 +154,19 @@ def get_user_posts(user_id: str, current_user = Depends(get_current_user)):
             # Check if current user liked this post
             user_liked = supabase.table("post_likes").select("id").eq("post_id", post["id"]).eq("user_id", current_user["id"]).execute()
             
+            # Get all comments for this post (ascending order - oldest first)
+            comments = supabase.table("post_comments").select("*").eq("post_id", post["id"]).order("created_at").execute()
+            comments_with_names = []
+            for c in comments.data:
+                commenter = supabase.table("profiles").select("username").eq("id", c["user_id"]).execute()
+                comments_with_names.append({
+                    "id": c["id"],
+                    "user_id": c["user_id"],
+                    "username": commenter.data[0]["username"] if commenter.data else "Unknown",
+                    "comment": c["comment"],
+                    "created_at": c["created_at"]
+                })
+            
             result.append({
                 "id": post["id"],
                 "user_id": post["user_id"],
@@ -169,6 +181,7 @@ def get_user_posts(user_id: str, current_user = Depends(get_current_user)):
                 "likes_count": post.get("likes_count", 0),
                 "comment_count": post.get("comment_count", 0),
                 "user_liked": len(user_liked.data) > 0,
+                "comments": comments_with_names,
                 "created_at": post["created_at"]
             })
         
