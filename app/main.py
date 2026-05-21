@@ -13,6 +13,7 @@ load_dotenv()
 
 app = FastAPI(title="SkillSwap API", version="1.0.0")
 
+# Production CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -25,11 +26,12 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5501",
-        
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    expose_headers=["Content-Length", "X-Kuma-Revision"],
+    max_age=3600,
 )
 
 app.include_router(auth.router)
@@ -53,6 +55,11 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+# OPTIONS handler for preflight requests (for any path)
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    return {}
 
 if __name__ == "__main__":
     import uvicorn
