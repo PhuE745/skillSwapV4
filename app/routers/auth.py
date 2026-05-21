@@ -20,6 +20,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    pin: str  # ← ADDED PIN FIELD
 
 class VerifyPinRequest(BaseModel):
     email: str
@@ -34,6 +35,7 @@ class ResetPasswordRequest(BaseModel):
 def register(user: RegisterRequest):
     try:
         print(f"🔵 REGISTRATION STARTED for: {user.email}")
+        print(f"📝 Username received from form: '{user.username}'")  # ← ADDED DEBUG LINE
         
         # Validate PIN
         if not user.pin or not user.pin.isdigit() or len(user.pin) != 4:
@@ -83,6 +85,12 @@ def register(user: RegisterRequest):
         
         print(f"✅ Profile updated for: {user.email}")
         
+        # FORCE update username to override any trigger
+        supabase.table("profiles").update({
+            "username": user.username
+        }).eq("id", auth_response.user.id).execute()
+        print(f"✅ Username forced to: '{user.username}'")
+        
         # Create token
         token = create_access_token({"sub": auth_response.user.id})
         
@@ -99,34 +107,60 @@ def register(user: RegisterRequest):
 @router.post("/login")
 def login(request: LoginRequest):
     """
-    Authenticate a user.
-    
-    - Uses Supabase Auth for password verification (not profiles.password_hash)
-    - Password truncated to 72 chars for Supabase Auth compatibility
-    - Returns JWT token and user profile data
+    Authenticate a user with email, password, and PIN.
     """
     try:
         print(f"🔵 LOGIN ATTEMPT for: {request.email}")
         
-        # Supabase Auth has a 72-character password limit
+        # First, get user profile from database
+        profile = supabase.table("profiles").select("*").eq("email", request.email).execute()
+        
+        if not profile.data:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        user = profile.data[0]
+        
+        # Check if account is locked due to too many failed PIN attempts
+        if user.get("pin_locked_until"):
+            lock_until = datetime.fromisoformat(user["pin_locked_until"])
+            if datetime.utcnow() < lock_until:
+                remaining_minutes = int((lock_until - datetime.utcnow()).total_seconds() / 60)
+                raise HTTPException(status_code=429, detail=f"Account locked. Try again in {remaining_minutes} minutes")
+        
+        # Verify PIN first
+        if not pwd_context.verify(request.pin, user["pin_hash"]):
+            # Increment failed PIN attempts
+            new_attempts = user.get("pin_attempts", 0) + 1
+            
+            # Lock after 5 failed attempts
+            if new_attempts >= 5:
+                lock_until = datetime.utcnow() + timedelta(minutes=15)
+                supabase.table("profiles").update({
+                    "pin_attempts": new_attempts,
+                    "pin_locked_until": lock_until.isoformat()
+                }).eq("id", user["id"]).execute()
+                raise HTTPException(status_code=429, detail="Too many failed PIN attempts. Account locked for 15 minutes")
+            else:
+                supabase.table("profiles").update({"pin_attempts": new_attempts}).eq("id", user["id"]).execute()
+            
+            raise HTTPException(status_code=401, detail="Invalid PIN")
+        
+        # Reset PIN attempts on successful verification
+        supabase.table("profiles").update({
+            "pin_attempts": 0,
+            "pin_locked_until": None
+        }).eq("id", user["id"]).execute()
+        
+        # Now verify password with Supabase Auth
         safe_password = request.password[:72]
         
-        # Authenticate with Supabase Auth (this verifies the password)
         auth_response = supabase.auth.sign_in_with_password({
             "email": request.email,
             "password": safe_password,
         })
         
         if not auth_response.user:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        
-        print(f"✅ Auth login successful: {auth_response.user.id}")
-        
-        # Get profile data from public.profiles table
-        profile = supabase.table("profiles").select("*").eq("id", auth_response.user.id).execute()
-        
-        if not profile.data:
-            raise HTTPException(status_code=404, detail="Profile not found")
+            raise HTTPException(status_code=401, detail="Invalid password")
         
         # Create JWT token
         token = create_access_token({"sub": auth_response.user.id})
@@ -136,9 +170,11 @@ def login(request: LoginRequest):
         return {
             "access_token": token, 
             "token_type": "bearer", 
-            "user": profile.data[0]
+            "user": user
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ LOGIN ERROR: {e}")
         import traceback

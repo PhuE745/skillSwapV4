@@ -37,8 +37,12 @@ def create_review(request: CreateReviewRequest, current_user = Depends(get_curre
         # Determine who is being reviewed (the other person)
         reviewed_id = exchange_data["provider_id"] if reviewer_id == exchange_data["requester_id"] else exchange_data["requester_id"]
         
-        # Check if already reviewed
-        existing = supabase.table("reviews").select("*").eq("exchange_id", request.exchange_id).execute()
+        # Check if THIS USER already reviewed this exchange
+        existing = supabase.table("reviews").select("*")\
+            .eq("exchange_id", request.exchange_id)\
+            .eq("reviewer_id", reviewer_id)\
+            .execute()
+        
         if existing.data:
             raise HTTPException(status_code=400, detail="You already reviewed this exchange")
         
@@ -100,7 +104,12 @@ def get_user_reviews(user_id: str, current_user = Depends(get_current_user)):
 @router.get("/exchange/{exchange_id}")
 def get_review_by_exchange(exchange_id: int, current_user = Depends(get_current_user)):
     try:
-        review = supabase.table("reviews").select("*").eq("exchange_id", exchange_id).execute()
+        # Get current user's review for this exchange
+        review = supabase.table("reviews").select("*")\
+            .eq("exchange_id", exchange_id)\
+            .eq("reviewer_id", current_user["id"])\
+            .execute()
+        
         if not review.data:
             return {"exists": False}
         
