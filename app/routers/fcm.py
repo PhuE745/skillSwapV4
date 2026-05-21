@@ -7,14 +7,25 @@ import firebase_admin
 from datetime import datetime
 from firebase_admin import credentials, messaging
 import os
+import json
 
 router = APIRouter(prefix="/api/v1/fcm", tags=["fcm"])
 
 # Initialize Firebase Admin SDK (only once)
-cred_path = os.path.join(os.path.dirname(__file__), "..", "..", "firebase-key.json")
 if not firebase_admin._apps:
-    cred = credentials.Certificate(cred_path)
-    firebase_admin.initialize_app(cred)
+    # Load Firebase credentials from environment variable
+    firebase_json_str = os.getenv("FIREBASE_JSON")
+    
+    if not firebase_json_str:
+        raise Exception("FIREBASE_JSON environment variable not set")
+    
+    try:
+        firebase_dict = json.loads(firebase_json_str)
+        cred = credentials.Certificate(firebase_dict)
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase Admin SDK initialized from environment variable")
+    except json.JSONDecodeError as e:
+        raise Exception(f"Invalid FIREBASE_JSON format: {e}")
 
 class FCMTokenRequest(BaseModel):
     token: str
