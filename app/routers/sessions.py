@@ -207,3 +207,17 @@ def delete_session(session_id: int, current_user = Depends(get_current_user)):
     except Exception as e:
         print(f"Delete session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/pending-count")
+def get_pending_count(current_user = Depends(get_current_user)):
+    """Get pending session count for current user"""
+    try:
+        # Count pending sessions where current user is the receiver
+        result = supabase.table("sessions").select("*", count="exact")\
+            .eq("receiver_id", current_user["id"])\
+            .eq("status", "pending")\
+            .execute()
+        return result.count
+    except Exception as e:
+        print(f"Pending count error: {e}")
+        return 0

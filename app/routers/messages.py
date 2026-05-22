@@ -132,3 +132,17 @@ def get_messages(other_user_id: str, current_user = Depends(get_current_user)):
         })
     
     return {"other_user_name": other_name, "messages": result}
+
+@router.get("/unread-count")
+def get_unread_count(current_user = Depends(get_current_user)):
+    """Get total unread message count for current user"""
+    try:
+        # Count unread messages where current user is the receiver
+        result = supabase.table("messages").select("*", count="exact")\
+            .eq("receiver_id", current_user["id"])\
+            .eq("is_read", False)\
+            .execute()
+        return result.count
+    except Exception as e:
+        print(f"Unread count error: {e}")
+        return 0
