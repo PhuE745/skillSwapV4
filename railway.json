@@ -3,6 +3,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python -m uvicorn app.main:app --reload --http h11"
+    "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT --http h11"
   }
 }

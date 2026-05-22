@@ -11,21 +11,33 @@ import json
 
 router = APIRouter(prefix="/api/v1/fcm", tags=["fcm"])
 
+# Global flag to check if Firebase is initialized
+firebase_initialized = False
+
 # Initialize Firebase Admin SDK (only once)
-if not firebase_admin._apps:
-    # Load Firebase credentials from environment variable
+try:
+    # Try to load from environment variable first
     firebase_json_str = os.getenv("FIREBASE_JSON")
     
-    if not firebase_json_str:
-        raise Exception("FIREBASE_JSON environment variable not set")
-    
-    try:
+    if firebase_json_str:
         firebase_dict = json.loads(firebase_json_str)
         cred = credentials.Certificate(firebase_dict)
         firebase_admin.initialize_app(cred)
-        print("✅ Firebase Admin SDK initialized from environment variable")
-    except json.JSONDecodeError as e:
-        raise Exception(f"Invalid FIREBASE_JSON format: {e}")
+        firebase_initialized = True
+        print("✅ Firebase initialized from FIREBASE_JSON env variable")
+    else:
+        # Fallback to file
+        cred_path = os.path.join(os.path.dirname(__file__), "..", "..", "firebase-key.json")
+        if os.path.exists(cred_path):
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+            firebase_initialized = True
+            print("✅ Firebase initialized from firebase-key.json file")
+        else:
+            print("⚠️ No Firebase credentials found. Push notifications disabled.")
+            
+except Exception as e:
+    print(f"⚠️ Firebase initialization error: {e}. Push notifications disabled.")
 
 class FCMTokenRequest(BaseModel):
     token: str
@@ -81,6 +93,11 @@ def unregister_fcm_token(
 
 def send_push_notification(user_id: str, title: str, body: str, data: dict = None):
     """Send push notification to a specific user"""
+    # Skip if Firebase not initialized
+    if not firebase_initialized:
+        print(f"⚠️ Push notification skipped - Firebase not initialized. To: {user_id}")
+        return {"message": "Firebase not configured"}
+    
     try:
         # Get user's FCM tokens
         tokens = supabase.table("fcm_tokens").select("token").eq("user_id", user_id).execute()
@@ -102,7 +119,7 @@ def send_push_notification(user_id: str, title: str, body: str, data: dict = Non
             )
             
             response = messaging.send(message)
-            print(f"Notification sent to {user_id}: {response}")
+            print(f"✅ Notification sent to {user_id}: {response}")
         
         return {"message": "Notifications sent"}
     
