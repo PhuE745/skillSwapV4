@@ -16,6 +16,55 @@ class SendMessageRequest(BaseModel):
     attachment_type: Optional[str] = None
     attachment_size: Optional[int] = None
 
+# ========== SPECIFIC ROUTES FIRST (NO PARAMETERS) ==========
+
+@router.get("/unread-count")
+def get_unread_count(current_user = Depends(get_current_user)):
+    """Get total unread message count for current user"""
+    try:
+        result = supabase.table("messages").select("*", count="exact")\
+            .eq("receiver_id", current_user["id"])\
+            .eq("is_read", False)\
+            .execute()
+        return result.count
+    except Exception as e:
+        print(f"Unread count error: {e}")
+        return 0
+
+@router.get("/conversations")
+def get_conversations(current_user = Depends(get_current_user)):
+    user_id = current_user["id"]
+    
+    # Get all messages where user is sender or receiver
+    messages = supabase.table("messages").select("*")\
+        .or_(f"sender_id.eq.{user_id},receiver_id.eq.{user_id}")\
+        .order("created_at", desc=True)\
+        .execute()
+    
+    # Group by other user
+    conversations = {}
+    for msg in messages.data:
+        other_id = msg["receiver_id"] if msg["sender_id"] == user_id else msg["sender_id"]
+        
+        if other_id not in conversations:
+            other_user = supabase.table("profiles").select("username").eq("id", other_id).execute()
+            other_name = other_user.data[0]["username"] if other_user.data else "Unknown"
+            
+            # Check if last message has attachment
+            last_message = msg["message"]
+            if msg.get("attachment_name") and not last_message:
+                last_message = f"📎 {msg['attachment_name']}"
+            
+            conversations[other_id] = {
+                "user_id": other_id,
+                "username": other_name,
+                "last_message": last_message,
+                "last_message_time": msg["created_at"],
+                "unread_count": 0 if msg["sender_id"] == user_id else (0 if msg["is_read"] else 1)
+            }
+    
+    return list(conversations.values())
+
 @router.post("/send")
 def send_message(request: SendMessageRequest, current_user = Depends(get_current_user)):
     sender_id = current_user["id"]
@@ -62,39 +111,7 @@ def send_message(request: SendMessageRequest, current_user = Depends(get_current
     
     return {"message": "Message sent successfully", "data": result.data[0]}
 
-@router.get("/conversations")
-def get_conversations(current_user = Depends(get_current_user)):
-    user_id = current_user["id"]
-    
-    # Get all messages where user is sender or receiver
-    messages = supabase.table("messages").select("*")\
-        .or_(f"sender_id.eq.{user_id},receiver_id.eq.{user_id}")\
-        .order("created_at", desc=True)\
-        .execute()
-    
-    # Group by other user
-    conversations = {}
-    for msg in messages.data:
-        other_id = msg["receiver_id"] if msg["sender_id"] == user_id else msg["sender_id"]
-        
-        if other_id not in conversations:
-            other_user = supabase.table("profiles").select("username").eq("id", other_id).execute()
-            other_name = other_user.data[0]["username"] if other_user.data else "Unknown"
-            
-            # Check if last message has attachment
-            last_message = msg["message"]
-            if msg.get("attachment_name") and not last_message:
-                last_message = f"📎 {msg['attachment_name']}"
-            
-            conversations[other_id] = {
-                "user_id": other_id,
-                "username": other_name,
-                "last_message": last_message,
-                "last_message_time": msg["created_at"],
-                "unread_count": 0 if msg["sender_id"] == user_id else (0 if msg["is_read"] else 1)
-            }
-    
-    return list(conversations.values())
+# ========== DYNAMIC ROUTES (WITH PARAMETERS) - MUST BE LAST ==========
 
 @router.get("/{other_user_id}")
 def get_messages(other_user_id: str, current_user = Depends(get_current_user)):
@@ -132,17 +149,3 @@ def get_messages(other_user_id: str, current_user = Depends(get_current_user)):
         })
     
     return {"other_user_name": other_name, "messages": result}
-
-@router.get("/unread-count")
-def get_unread_count(current_user = Depends(get_current_user)):
-    """Get total unread message count for current user"""
-    try:
-        # Count unread messages where current user is the receiver
-        result = supabase.table("messages").select("*", count="exact")\
-            .eq("receiver_id", current_user["id"])\
-            .eq("is_read", False)\
-            .execute()
-        return result.count
-    except Exception as e:
-        print(f"Unread count error: {e}")
-        return 0

@@ -17,6 +17,22 @@ class CreateSessionRequest(BaseModel):
 class UpdateSessionRequest(BaseModel):
     status: str
 
+# ========== SPECIFIC ROUTES FIRST (NO PARAMETERS) ==========
+
+@router.get("/pending-count")
+def get_pending_count(current_user = Depends(get_current_user)):
+    """Get pending session count for current user"""
+    try:
+        # Count pending sessions where current user is the receiver
+        result = supabase.table("sessions").select("*", count="exact")\
+            .eq("receiver_id", current_user["id"])\
+            .eq("status", "pending")\
+            .execute()
+        return result.count
+    except Exception as e:
+        print(f"Pending count error: {e}")
+        return 0
+
 @router.post("")
 def create_session(request: CreateSessionRequest, current_user = Depends(get_current_user)):
     try:
@@ -108,6 +124,8 @@ def get_my_sessions(current_user = Depends(get_current_user)):
         print(f"Get sessions error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ========== DYNAMIC ROUTES (WITH PARAMETERS) - MUST BE LAST ==========
+
 @router.put("/{session_id}")
 def update_session(session_id: int, request: UpdateSessionRequest, current_user = Depends(get_current_user)):
     try:
@@ -145,7 +163,6 @@ def update_session(session_id: int, request: UpdateSessionRequest, current_user 
                 }
             )
             
-            # ========== ADD THIS ==========
             # Send "Session Scheduled" notification to BOTH users
             session_skill = session_data.get('skill_tag', 'skill exchange')
             session_date = datetime.fromisoformat(session_data['scheduled_date']).strftime("%B %d at %I:%M %p")
@@ -171,7 +188,6 @@ def update_session(session_id: int, request: UpdateSessionRequest, current_user 
                     "session_id": session_id
                 }
             )
-            # ========== END ADD ==========
             
         elif request.status == "completed":
             update_data["completed_at"] = datetime.utcnow().isoformat()
@@ -207,17 +223,3 @@ def delete_session(session_id: int, current_user = Depends(get_current_user)):
     except Exception as e:
         print(f"Delete session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
-@router.get("/pending-count")
-def get_pending_count(current_user = Depends(get_current_user)):
-    """Get pending session count for current user"""
-    try:
-        # Count pending sessions where current user is the receiver
-        result = supabase.table("sessions").select("*", count="exact")\
-            .eq("receiver_id", current_user["id"])\
-            .eq("status", "pending")\
-            .execute()
-        return result.count
-    except Exception as e:
-        print(f"Pending count error: {e}")
-        return 0
