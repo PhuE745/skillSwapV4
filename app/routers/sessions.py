@@ -145,6 +145,34 @@ def update_session(session_id: int, request: UpdateSessionRequest, current_user 
                 }
             )
             
+            # ========== ADD THIS ==========
+            # Send "Session Scheduled" notification to BOTH users
+            session_skill = session_data.get('skill_tag', 'skill exchange')
+            session_date = datetime.fromisoformat(session_data['scheduled_date']).strftime("%B %d at %I:%M %p")
+            
+            # Notify proposer
+            send_push_notification(
+                user_id=session_data["proposer_id"],
+                title="📅 Session Scheduled",
+                body=f"Your {session_skill} session with {other_name} is scheduled for {session_date}",
+                data={
+                    "type": "session_scheduled",
+                    "session_id": session_id
+                }
+            )
+            
+            # Notify receiver
+            send_push_notification(
+                user_id=session_data["receiver_id"],
+                title="📅 Session Scheduled",
+                body=f"Your {session_skill} session with {current_user_name} is scheduled for {session_date}",
+                data={
+                    "type": "session_scheduled",
+                    "session_id": session_id
+                }
+            )
+            # ========== END ADD ==========
+            
         elif request.status == "completed":
             update_data["completed_at"] = datetime.utcnow().isoformat()
         
