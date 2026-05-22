@@ -126,3 +126,34 @@ def send_push_notification(user_id: str, title: str, body: str, data: dict = Non
     except Exception as e:
         print(f"Send notification error: {e}")
         return {"error": str(e)}
+    
+@router.post("/send-test")
+def send_test_notification(request: dict, current_user = Depends(get_current_user)):
+    """Test endpoint to send a manual push notification"""
+    try:
+        token = request.get("token")
+        title = request.get("title", "Test Notification")
+        body = request.get("body", "This is a test")
+        
+        if not token:
+            return {"error": "No token provided"}
+        
+        # Send notification
+        from firebase_admin import messaging
+        
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=title,
+                body=body,
+            ),
+            token=token,
+        )
+        
+        response = messaging.send(message)
+        print(f"✅ Test notification sent: {response}")
+        
+        return {"success": True, "response": response}
+    
+    except Exception as e:
+        print(f"❌ Test notification error: {e}")
+        return {"error": str(e)}
