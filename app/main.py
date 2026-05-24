@@ -8,6 +8,7 @@ from app.routers import sessions
 from app.routers import upload
 from app.routers import fcm
 from app.routers import badges
+from app.middleware.logging import log_requests
 
 load_dotenv()
 
@@ -26,6 +27,8 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5501",
+        "http://13.220.129.93", 
+        "http://13.220.129.93:8000",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
